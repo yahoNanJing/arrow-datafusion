@@ -46,7 +46,7 @@ pub(crate) mod stats;
 pub(crate) mod stddev;
 pub(crate) mod sum;
 pub(crate) mod sum_distinct;
-mod tdigest;
+pub(crate) mod tdigest;
 pub(crate) mod variance;
 
 /// An aggregate expression that:

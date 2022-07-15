@@ -255,6 +255,27 @@ pub fn create_aggregate_expr(
                 "MEDIAN(DISTINCT) aggregations are not available".to_string(),
             ));
         }
+        (AggregateFunction::KylinBitMapCountDistinct, _) => Arc::new(
+            expressions::kylin::kylin_bitmap_distinct::KylinBitMapDistinct::new(
+                coerced_phy_exprs[0].clone(),
+                name,
+                coerced_exprs_types[0].clone(),
+            ),
+        ),
+        (AggregateFunction::KylinApproxPercentile, _) => Arc::new(
+            expressions::kylin::kylin_approx_percentile::KylinApproxPercentile::new(
+                coerced_phy_exprs,
+                name,
+                return_type,
+            )?,
+        ),
+        (AggregateFunction::KylinApproxCountDistinct, _) => Arc::new(
+            expressions::kylin::kylin_approx_distinct::KylinApproxDistinct::new(
+                coerced_phy_exprs,
+                name,
+                coerced_exprs_types[0].clone(),
+            )?,
+        ),
     })
 }
 

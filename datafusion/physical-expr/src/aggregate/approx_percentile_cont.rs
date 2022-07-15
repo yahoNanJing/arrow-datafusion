@@ -88,6 +88,10 @@ impl ApproxPercentileCont {
         })
     }
 
+    pub(crate) fn get_percentile(&self) -> f64 {
+        self.percentile
+    }
+
     pub(crate) fn create_plain_accumulator(&self) -> Result<ApproxPercentileAccumulator> {
         let accumulator: ApproxPercentileAccumulator = match &self.input_data_type {
             t @ (DataType::UInt8

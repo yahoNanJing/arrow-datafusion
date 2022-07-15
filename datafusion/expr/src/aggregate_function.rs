@@ -88,6 +88,13 @@ pub enum AggregateFunction {
     ApproxMedian,
     /// Grouping
     Grouping,
+
+    /// Kylin BitMap count distinct function
+    KylinBitMapCountDistinct,
+    /// Kylin approx percentile function
+    KylinApproxPercentile,
+    /// Kylin hll count distinct function
+    KylinApproxCountDistinct,
 }
 
 impl fmt::Display for AggregateFunction {
@@ -125,6 +132,10 @@ impl FromStr for AggregateFunction {
             }
             "approx_median" => AggregateFunction::ApproxMedian,
             "grouping" => AggregateFunction::Grouping,
+
+            "kylin_bitmap_distinct" => AggregateFunction::KylinBitMapCountDistinct,
+            "kylin_approx_percentile" => AggregateFunction::KylinApproxPercentile,
+            "kylin_approx_distinct" => AggregateFunction::KylinApproxCountDistinct,
             _ => {
                 return Err(DataFusionError::Plan(format!(
                     "There is no built-in function named {}",
@@ -177,6 +188,10 @@ pub fn return_type(
         }
         AggregateFunction::ApproxMedian => Ok(coerced_data_types[0].clone()),
         AggregateFunction::Grouping => Ok(DataType::Int32),
+
+        AggregateFunction::KylinBitMapCountDistinct
+        | AggregateFunction::KylinApproxCountDistinct => Ok(DataType::Int64),
+        AggregateFunction::KylinApproxPercentile => Ok(DataType::Float64),
     }
 }
 
@@ -331,6 +346,34 @@ pub fn coerce_types(
             Ok(input_types.to_vec())
         }
         AggregateFunction::Grouping => Ok(vec![input_types[0].clone()]),
+
+        AggregateFunction::KylinBitMapCountDistinct => {
+            if !is_kylin_bitmap_count_distinct_supported_arg_type(&input_types[0]) {
+                return Err(DataFusionError::Plan(format!(
+                    "The function {:?} does not support inputs of type {:?}.",
+                    agg_fun, input_types[0]
+                )));
+            }
+            Ok(input_types.to_vec())
+        }
+        AggregateFunction::KylinApproxPercentile => {
+            if !is_kylin_approx_percentile_supported_arg_type(&input_types[0]) {
+                return Err(DataFusionError::Plan(format!(
+                    "The function {:?} does not support inputs of type {:?}.",
+                    agg_fun, input_types[0]
+                )));
+            }
+            Ok(input_types.to_vec())
+        }
+        AggregateFunction::KylinApproxCountDistinct => {
+            if !is_kylin_approx_count_distinct_supported_arg_type(&input_types[0]) {
+                return Err(DataFusionError::Plan(format!(
+                    "The function {:?} does not support inputs of type {:?}.",
+                    agg_fun, input_types[0]
+                )));
+            }
+            Ok(input_types.to_vec())
+        }
     }
 }
 
@@ -385,6 +428,13 @@ pub fn signature(fun: &AggregateFunction) -> Signature {
                 .collect(),
             Volatility::Immutable,
         ),
+        AggregateFunction::KylinBitMapCountDistinct => {
+            Signature::any(1, Volatility::Immutable)
+        }
+        AggregateFunction::KylinApproxPercentile
+        | AggregateFunction::KylinApproxCountDistinct => {
+            Signature::any(2, Volatility::Immutable)
+        }
     }
 }
 
@@ -703,6 +753,22 @@ pub fn is_approx_percentile_cont_supported_arg_type(arg_type: &DataType) -> bool
             | DataType::Float32
             | DataType::Float64
     )
+}
+
+pub(crate) fn is_kylin_bitmap_count_distinct_supported_arg_type(
+    arg_type: &DataType,
+) -> bool {
+    matches!(arg_type, DataType::Binary)
+}
+
+pub(crate) fn is_kylin_approx_percentile_supported_arg_type(arg_type: &DataType) -> bool {
+    matches!(arg_type, DataType::Binary)
+}
+
+pub(crate) fn is_kylin_approx_count_distinct_supported_arg_type(
+    arg_type: &DataType,
+) -> bool {
+    matches!(arg_type, DataType::Binary)
 }
 
 #[cfg(test)]

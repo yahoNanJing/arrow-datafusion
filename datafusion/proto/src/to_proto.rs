@@ -351,6 +351,10 @@ impl From<&AggregateFunction> for protobuf::AggregateFunction {
             }
             AggregateFunction::ApproxMedian => Self::ApproxMedian,
             AggregateFunction::Grouping => Self::Grouping,
+
+            AggregateFunction::KylinBitMapCountDistinct => Self::KylinBitmapCountDistinct,
+            AggregateFunction::KylinApproxPercentile => Self::KylinApproxPercentile,
+            AggregateFunction::KylinApproxCountDistinct => Self::KylinApproxCountDistinct,
         }
     }
 }
@@ -537,6 +541,15 @@ impl TryFrom<&Expr> for protobuf::LogicalExprNode {
                         protobuf::AggregateFunction::ApproxMedian
                     }
                     AggregateFunction::Grouping => protobuf::AggregateFunction::Grouping,
+                    AggregateFunction::KylinBitMapCountDistinct => {
+                        protobuf::AggregateFunction::KylinBitmapCountDistinct
+                    }
+                    AggregateFunction::KylinApproxPercentile => {
+                        protobuf::AggregateFunction::KylinApproxPercentile
+                    }
+                    AggregateFunction::KylinApproxCountDistinct => {
+                        protobuf::AggregateFunction::KylinApproxCountDistinct
+                    }
                 };
 
                 let aggregate_expr = protobuf::AggregateExprNode {
