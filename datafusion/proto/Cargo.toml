@@ -39,7 +39,7 @@ arrow = { version = "18.0.0" }
 datafusion = { path = "../core", version = "10.0.0" }
 datafusion-common = { path = "../common", version = "10.0.0" }
 datafusion-expr = { path = "../expr", version = "10.0.0" }
-prost = "0.10"
+prost = "0.11"
 
 
 [dev-dependencies]
