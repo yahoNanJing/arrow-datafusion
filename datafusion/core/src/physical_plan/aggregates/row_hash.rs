@@ -29,7 +29,7 @@ use std::time::Instant;
 use std::vec;
 
 use ahash::RandomState;
-use arrow::row::{RowConverter, Rows, SortField};
+use arrow::row::{IRows, RowConverter, SortField};
 use datafusion_physical_expr::hash_utils::create_hashes;
 use futures::ready;
 use futures::stream::{Stream, StreamExt};
@@ -181,7 +181,7 @@ pub(crate) struct GroupedHashAggregateStream {
     /// important for multi-column group keys.
     ///
     /// [`Row`]: arrow::row::Row
-    group_values: Rows,
+    group_values: Box<dyn IRows>,
 
     /// scratch space for the current input [`RecordBatch`] being
     /// processed. The reason this is a field is so it can be reused

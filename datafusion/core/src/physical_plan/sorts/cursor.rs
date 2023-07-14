@@ -18,7 +18,7 @@
 use crate::physical_plan::sorts::sort::SortOptions;
 use arrow::buffer::ScalarBuffer;
 use arrow::datatypes::ArrowNativeTypeOp;
-use arrow::row::{Row, Rows};
+use arrow::row::{IRows, Row};
 use arrow_array::types::ByteArrayType;
 use arrow_array::{Array, ArrowPrimitiveType, GenericByteArray, PrimitiveArray};
 use std::cmp::Ordering;
@@ -28,7 +28,7 @@ pub struct RowCursor {
     cur_row: usize,
     num_rows: usize,
 
-    rows: Rows,
+    rows: Box<dyn IRows>,
 }
 
 impl std::fmt::Debug for RowCursor {
@@ -42,7 +42,7 @@ impl std::fmt::Debug for RowCursor {
 
 impl RowCursor {
     /// Create a new SortKeyCursor
-    pub fn new(rows: Rows) -> Self {
+    pub fn new(rows: Box<dyn IRows>) -> Self {
         Self {
             cur_row: 0,
             num_rows: rows.num_rows(),

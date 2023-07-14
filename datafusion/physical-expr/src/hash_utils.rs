@@ -20,7 +20,7 @@
 use ahash::RandomState;
 use arrow::array::*;
 use arrow::datatypes::*;
-use arrow::row::Rows;
+use arrow::row::IRows;
 use arrow::{downcast_dictionary_array, downcast_primitive_array};
 use arrow_buffer::i256;
 use datafusion_common::{
@@ -312,7 +312,7 @@ pub fn create_hashes<'a>(
 /// See comments on `hashes_buffer` for more details
 #[cfg(feature = "force_hash_collisions")]
 pub fn create_row_hashes_v2<'a>(
-    _rows: &Rows,
+    _rows: &dyn IRows,
     _random_state: &RandomState,
     hashes_buffer: &'a mut Vec<u64>,
 ) -> Result<&'a mut Vec<u64>> {
@@ -325,7 +325,7 @@ pub fn create_row_hashes_v2<'a>(
 /// Creates hash values for every row, based on their raw bytes.
 #[cfg(not(feature = "force_hash_collisions"))]
 pub fn create_row_hashes_v2<'a>(
-    rows: &Rows,
+    rows: &dyn IRows,
     random_state: &RandomState,
     hashes_buffer: &'a mut Vec<u64>,
 ) -> Result<&'a mut Vec<u64>> {
