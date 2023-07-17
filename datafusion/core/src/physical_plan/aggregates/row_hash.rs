@@ -25,7 +25,6 @@ use datafusion_physical_expr::{
 use log::debug;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::Instant;
 use std::vec;
 
 use ahash::RandomState;
@@ -211,8 +210,6 @@ pub(crate) struct GroupedHashAggregateStream {
 
     /// max rows in output RecordBatches
     batch_size: usize,
-
-    elapsed_update_group_time: u128,
 }
 
 impl GroupedHashAggregateStream {
@@ -293,7 +290,6 @@ impl GroupedHashAggregateStream {
             baseline_metrics,
             random_state: Default::default(),
             batch_size,
-            elapsed_update_group_time: 0,
         })
     }
 }
@@ -373,10 +369,6 @@ impl Stream for GroupedHashAggregateStream {
                 ExecutionState::ProducingOutput(batch) => {
                     // slice off a part of the batch, if needed
                     let output_batch = if batch.num_rows() <= self.batch_size {
-                        println!(
-                            "Update group state: {}ns",
-                            self.elapsed_update_group_time
-                        );
                         self.exec_state = ExecutionState::Done;
                         batch
                     } else {
@@ -437,7 +429,6 @@ impl GroupedHashAggregateStream {
         batch_hashes.resize(n_rows, 0);
         create_hashes(group_values, &self.random_state, batch_hashes)?;
 
-        let start_ns = Instant::now();
         match self.row_converter.get_row_width() {
             Some(row_width) if row_width <= VALUE_EMBEDDED_WIDTH_THRESHOLD => {
                 for (row, &hash) in batch_hashes.iter().enumerate() {
@@ -506,7 +497,6 @@ impl GroupedHashAggregateStream {
                 }
             }
         }
-        self.elapsed_update_group_time += start_ns.elapsed().as_nanos();
 
         // account for memory growth in scratch space
         *allocated += self.scratch_space.size();
