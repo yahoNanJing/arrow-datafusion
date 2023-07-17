@@ -431,6 +431,7 @@ impl GroupedHashAggregateStream {
 
         match self.row_converter.get_row_width() {
             Some(row_width) if row_width <= VALUE_EMBEDDED_WIDTH_THRESHOLD => {
+                let mut padded_group_value = [0u8; VALUE_EMBEDDED_WIDTH_THRESHOLD];
                 for (row, &hash) in batch_hashes.iter().enumerate() {
                     let entry = self.value_embedded_map.get_mut(
                         hash,
@@ -438,7 +439,9 @@ impl GroupedHashAggregateStream {
                             // verify that a group that we are inserting with hash is
                             // actually the same key value as the group in
                             // existing_idx  (aka group_values @ row)
-                            group_rows.row_data(row) == &padded_value[0..row_width]
+                            padded_group_value[0..row_width]
+                                .copy_from_slice(group_rows.row_data(row));
+                            padded_group_value == *padded_value
                         },
                     );
 
