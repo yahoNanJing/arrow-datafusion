@@ -61,6 +61,8 @@ pub(crate) enum ExecutionState {
 
 use super::AggregateExec;
 
+const VALUE_EMBEDDED_WIDTH_THRESHOLD: usize = 16;
+
 /// Hash based Grouping Aggregator
 ///
 /// # Design Goals
@@ -173,6 +175,15 @@ pub(crate) struct GroupedHashAggregateStream {
     /// values: (hash, group_index)
     map: RawTable<(u64, usize)>,
 
+    /// When the group values are of fixed width
+    /// and the width is not larger than the [`VALUE_EMBEDDED_WIDTH_THRESHOLD`],
+    /// then we can use this map to embed the value directly into the value
+    /// to reduce indirectly memory access.
+    ///
+    /// keys: u64 hashes of the GroupValue
+    /// values: (hash, group_index, padded value)
+    value_embedded_map: RawTable<(u64, usize, [u8; VALUE_EMBEDDED_WIDTH_THRESHOLD])>,
+
     /// The actual group by values, stored in arrow [`Row`] format.
     /// `group_values[i]` holds the group value for group_index `i`.
     ///
@@ -257,6 +268,7 @@ impl GroupedHashAggregateStream {
         let name = format!("GroupedHashAggregateStream[{partition}]");
         let reservation = MemoryConsumer::new(name).register(context.memory_pool());
         let map = RawTable::with_capacity(0);
+        let map2 = RawTable::with_capacity(0);
         let group_values = row_converter.empty_rows(0, 0);
 
         timer.done();
@@ -274,6 +286,7 @@ impl GroupedHashAggregateStream {
             group_by: agg_group_by,
             reservation,
             map,
+            value_embedded_map: map2,
             group_values,
             scratch_space: ScratchSpace::new(),
             exec_state,
@@ -425,33 +438,73 @@ impl GroupedHashAggregateStream {
         create_hashes(group_values, &self.random_state, batch_hashes)?;
 
         let start_ns = Instant::now();
-        for (row, &hash) in batch_hashes.iter().enumerate() {
-            let entry = self.map.get_mut(hash, |(_hash, group_idx)| {
-                // verify that a group that we are inserting with hash is
-                // actually the same key value as the group in
-                // existing_idx  (aka group_values @ row)
-                group_rows.row(row) == self.group_values.row(*group_idx)
-            });
-
-            let group_idx = match entry {
-                // Existing group_index for this group value
-                Some((_hash, group_idx)) => *group_idx,
-                //  1.2 Need to create new entry for the group
-                None => {
-                    // Add new entry to aggr_state and save newly created index
-                    let group_idx = self.group_values.num_rows();
-                    self.group_values.push(group_rows.row(row));
-
-                    // for hasher function, use precomputed hash value
-                    self.map.insert_accounted(
-                        (hash, group_idx),
-                        |(hash, _group_index)| *hash,
-                        allocated,
+        match self.row_converter.get_row_width() {
+            Some(row_width) if row_width <= VALUE_EMBEDDED_WIDTH_THRESHOLD => {
+                for (row, &hash) in batch_hashes.iter().enumerate() {
+                    let entry = self.value_embedded_map.get_mut(
+                        hash,
+                        |(_hash, _group_idx, padded_value)| {
+                            // verify that a group that we are inserting with hash is
+                            // actually the same key value as the group in
+                            // existing_idx  (aka group_values @ row)
+                            group_rows.row_data(row) == &padded_value[0..row_width]
+                        },
                     );
-                    group_idx
+
+                    let group_idx = match entry {
+                        // Existing group_index for this group value
+                        Some((_hash, group_idx, _padded_value)) => *group_idx,
+                        //  1.2 Need to create new entry for the group
+                        None => {
+                            // Add new entry to aggr_state and save newly created index
+                            let group_idx = self.group_values.num_rows();
+                            self.group_values.push(group_rows.row(row));
+
+                            // for hasher function, use precomputed hash value
+                            let mut padded_value = [0u8; VALUE_EMBEDDED_WIDTH_THRESHOLD];
+                            padded_value[0..row_width]
+                                .copy_from_slice(group_rows.row_data(row));
+                            self.value_embedded_map.insert_accounted(
+                                (hash, group_idx, padded_value),
+                                |(hash, _group_index, _padded_value)| *hash,
+                                allocated,
+                            );
+                            group_idx
+                        }
+                    };
+                    group_indices.push(group_idx);
                 }
-            };
-            group_indices.push(group_idx);
+            }
+            _ => {
+                for (row, &hash) in batch_hashes.iter().enumerate() {
+                    let entry = self.map.get_mut(hash, |(_hash, group_idx)| {
+                        // verify that a group that we are inserting with hash is
+                        // actually the same key value as the group in
+                        // existing_idx  (aka group_values @ row)
+                        group_rows.row(row) == self.group_values.row(*group_idx)
+                    });
+
+                    let group_idx = match entry {
+                        // Existing group_index for this group value
+                        Some((_hash, group_idx)) => *group_idx,
+                        //  1.2 Need to create new entry for the group
+                        None => {
+                            // Add new entry to aggr_state and save newly created index
+                            let group_idx = self.group_values.num_rows();
+                            self.group_values.push(group_rows.row(row));
+
+                            // for hasher function, use precomputed hash value
+                            self.map.insert_accounted(
+                                (hash, group_idx),
+                                |(hash, _group_index)| *hash,
+                                allocated,
+                            );
+                            group_idx
+                        }
+                    };
+                    group_indices.push(group_idx);
+                }
+            }
         }
         self.elapsed_update_group_time += start_ns.elapsed().as_nanos();
 
